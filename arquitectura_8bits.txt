@@ -1,0 +1,62 @@
+===================================================================
+              ARQUITECTURA VIRTUAL DE 8 BITS
+      Hoja de Referencia Tecnica (Resumen Imprimible)
+===================================================================
+
+1. MAPA DE MEMORIA (10 KB / Bus de 16 bits)
+-------------------------------------------------------------------
+El sistema cuenta con un bus logico de 16 bits (0x0000 a 0xFFFF).
+La memoria fisica real esta limitada a 10,240 bytes (0x27FF).
+
+Rango (Hex)     Rango (Dec)   Tamano    Uso / Segmento de Hardware
+-----------     -----------   ------    --------------------------
+0x0000-0x00FF   00000-00255   256 B     Pagina Cero (Zero Page)
+0x0100-0x01FF   00256-00511   256 B     Pila del Sistema (Stack)
+0x0200-0x1FFF   00512-08191   7,680 B   Codigo del Programa
+0x2000-0x27EF   08192-10223   2,032 B   VRAM (Pantalla 40x40 pixels)
+0x27F0-0x27FF   10224-10239   16 B      Entrada/Salida Mapeada (I/O)
+                                        - 0x27F0: Puerto Teclado
+                                        - 0x27F1: Puerto Pantalla
+
+2. REGISTROS DEL SISTEMA
+-------------------------------------------------------------------
+La CPU se compone de 6 registros fundamentales:
+
+* A  (Acumulador - 8 bits): Operaciones matematicas y logicas.
+* X  (Indice X - 8 bits)   : Contadores, bucles y acceso a arrays.
+* PC (Prog. Counter - 16b): Direccion de la proxima instruccion.
+* SP (Stack Pointer - 16b): Posicion actual en la Pila (0x0100-0x01FF).
+* F  (Flags - 8 bits)     : Registro de estado. Bits esenciales:
+    - Bit 0 [C] (Carry Flag)   : 1 si hay desbordamiento o prestamo.
+    - Bit 1 [Z] (Zero Flag)    : 1 si el resultado de la ALU es 0.
+    - Bit 2 [N] (Negative Flag): 1 si el bit 7 es 1 (negativo).
+
+
+3. JUEGO DE INSTRUCCIONES (ISA MINIMO AMPLIADO)
+-------------------------------------------------------------------
+Nota: Las direcciones [dir] se leen en formato Little-Endian 
+      (byte bajo primero, byte alto despues).
+
+Opcode   Nemonico       Bytes   Descripcion
+------   --------       -----   -----------
+[Transferencia de Datos]
+0x01     LDA [dir]      3       Carga en A el byte de [dir]. (Modifica Z, N)
+0x02     STA [dir]      3       Guarda el contenido de A en [dir].
+
+[Aritmetica y Logica (ALU)]
+0x03     ADD [dir]      3       Suma a A el byte de [dir]. (Modifica C, Z, N)
+0x04     SUB [dir]      3       Resta a A el byte de [dir]. (Modifica C, Z, N)
+0x07     AND [dir]      3       Y logico bit a bit entre A y [dir]. (C=0, Z, N)
+0x08     OR  [dir]      3       O logico bit a bit entre A y [dir]. (C=0, Z, N)
+0x09     XOR [dir]      3       O exclusivo bit a bit entre A y [dir]. (C=0, Z, N)
+
+[Control de Flujo / Saltos]
+0x05     JMP [dir]      3       Salto Incondicional. Forzar PC a [dir].
+0x06     JC  [dir]      3       Salto si hay Acarreo. Salta si C == 1.
+0x0A     JZ  [dir]      3       Salto si es Cero. Salta si Z == 1.
+
+[Control del Sistema]
+0x00     HALT           1       Detiene el procesador por completo.
+0x0B     WAI            1       Pausa la CPU hasta el proximo Flush (60 Hz).
+
+===================================================================
