@@ -52,13 +52,12 @@ unsigned int wtc_to_int() {
         factor*=256;
         p++;
     }
-    printf("actual=%li\n",time);//dbg
     return time;
 }
 
-static void sqr_drw(int x,int y,unsigned long c) {
+static void sqr_drw(int x,int y,byte_t c) {
     //dibuja un cuadrado de dimension d de color c
-	XSetForeground(display,graphic,c);
+	XSetForeground(display,graphic,color[c]);
 	XFillRectangle(display,virtual,graphic,x,y,PIXDIM,PIXDIM);
 }
 
@@ -67,7 +66,6 @@ static void scr_drw() {
     const unsigned short SCR_W=SCRW*PIXDIM;
     const unsigned short SCR_H=SCRH*PIXDIM;
     const unsigned long int TIME=VMH*TMH;
-    printf("time=%li\n",TIME);//dbg
     if(wtc_to_int()>=TIME) {
         wtc_zer();
         memory[RF]&=(~FWAI);
@@ -93,6 +91,34 @@ static void scr_drw() {
     }
 }
 
+static void scr_lis() {
+    //funcion que se encarga del registro de teclas y guardarlas en memoria
+    const char* KEYS="iljkzxpq"; //teclas utilizadas
+    XEvent ev;
+    KeySym ks;
+    int ty=0;
+    while(XPending(display)>0) {
+        XNextEvent(display,&ev);
+        ty=(ev.type==KeyPress)?1:(ev.type==KeyRelease)?-1:0;
+        if(ty) {
+            ks=XLookupKeysym(&ev.xkey,0);
+            char k='a'+(ks-XK_a);
+            const char* pk=KEYS;
+            byte_t msk=1;
+            while(*pk!='\0') {
+                if(*pk==k) {
+                    if(ty==1) memory[IIN]|=msk;
+                    else  memory[IIN]&=(~msk);
+                    break;
+                }
+                pk++;
+                msk=msk<<1;
+            }
+
+        }
+    }
+}                 
+
 void cmp_ini() {
     const unsigned short SCR_W=SCRW*PIXDIM;
     const unsigned short SCR_H=SCRH*PIXDIM;
@@ -108,7 +134,7 @@ void cmp_ini() {
 	if(display) {
 		int screennum=XDefaultScreen(display);
 		colormap=XDefaultColormap(display,screenum);
-        for(byte_t k=0;k<4;k++) color[k]=col_new(k);
+        for(byte_t k=0;k<4;k++) color[3-k]=col_new(k);
 		window=XCreateSimpleWindow(display,RootWindow(display,screennum),0,0,SCR_W,SCR_H,0,0,0);
 		XWindowAttributes xwa;
 		XGetWindowAttributes(display,window,&xwa);
@@ -157,7 +183,9 @@ void mem_prt() {
 
 int main() {
     cmp_ini();
-    mem_prt();
-    getchar();
+    while((memory[IIN] & KQT)==0) {
+        scr_drw();
+        scr_lis();
+    }
     cmp_end();
 }
