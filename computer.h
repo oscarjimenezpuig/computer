@@ -23,7 +23,12 @@
 #define IWC (IIN+DIN) //inicio del reloj
 #define DWC 4 //final del reloj
 
-#define DMEM (DZP+DRG+DST+DPR+DRM+DVR+DIN+DWC)
+#define IRWM IRM //inicio de la memoria que se puede leer y escribir
+#define DRWM (DRM+DVR) //dimension de la memoria que se puede leer escribir
+#define IORM IIN //inicio de la memoria solo leida
+#define DORM (DIN+DWC) //dimension de la memoria solo leida
+
+#define DMEM (DZP+DRG+DST+DPR+DRM+DVR+DIN+DWC) //memoria total
 
 #define RA IRG //registro A
 #define RB (RA+1) //registro B

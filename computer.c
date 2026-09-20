@@ -8,6 +8,8 @@
 
 #define PIXDIM 4 //dimension del pixel
 
+#define FION(F) ((((F) & memory[RF])!=0)?1:0) //comprobacion de flag
+#define KION(K) ((((K) & memory[IIN])!=0)?1:0) //comprobacion de tecla
 
 static Display* display=NULL;
 static Colormap colormap;
@@ -18,6 +20,12 @@ static int min_key_code=0;
 static int max_key_code=0;
 static memory_t memory;
 static unsigned long color[4];
+
+static int err_prt(char* s,int e) {
+    //impresion de un error con codigo e
+    fprintf(stderr,"ERROR: %s",s);
+    return e;
+}
 
 static unsigned long col_new(byte_t brg) {
 	XColor xc;
@@ -117,7 +125,30 @@ static void scr_lis() {
 
         }
     }
-}                 
+} 
+
+static int prg_inp(char* program) {
+    //lee el programa y devuelve el codigo de error si lo hubiera
+    char* ptr=program;
+    unsigned char fac=100;
+    byte_t byte=0;
+    byte_t* pp=memory+IPR;
+    unsigned short size=0;
+    while(*ptr!='\0') {
+        if(size<DPR) {
+            byte+=(*ptr-'0')*fac;
+            fac=fac/10;
+            if(!fac) {
+                *pp++=byte;
+                byte=0;
+                size++;
+                fac=100;
+            }
+            ptr++;
+        } else return err_prt("Program is too long",-1);
+    }
+    return 0;
+}
 
 void cmp_ini() {
     const unsigned short SCR_W=SCRW*PIXDIM;
@@ -170,8 +201,6 @@ void cmp_end() {
 	XCloseDisplay(display);
 }
 
-
-
 void mem_prt() {
     printf("SIZE=%i\n",DMEM);
     byte_t* p=memory;
@@ -179,13 +208,22 @@ void mem_prt() {
     printf("\n");
 }
 
-//prueba
-
-int main() {
+int main(int program_len,char* program[]) {
+    int err=0;
+    //se introduce el programa como cadena de caracteres de longitud byte toda seguida
     cmp_ini();
-    while((memory[IIN] & KQT)==0) {
-        scr_drw();
-        scr_lis();
+    if(program_len>0 && !(err=prg_inp(program[0]))) {
+        while(!KION(KQT)) {
+            scr_drw();
+            if(!FION(FWAI)) {
+                scr_lis();
+                if(!KION(KPA)) {
+                    //ejecucion probrama
+                }
+            }
+        }
     }
+    mem_prt();//dbg
     cmp_end();
+    return err;
 }
