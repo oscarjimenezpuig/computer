@@ -1,0 +1,64 @@
+================================================================================
+          RESUMEN DE FUNCIONAMIENTO DE LOS OPCODES (CONSOLA VIRTUAL)
+================================================================================
+
+[CONTROL DEL SISTEMA]
+* HALT (0x00): Apaga la CPU. Detiene el ciclo de ejecución por completo.
+* WAI  (0x0B): Pausa la CPU. El procesador se duerme ahorrando ciclos hasta que 
+               llega una señal externa (interrupción de teclado o refresco).
+
+[ACCESO A MEMORIA Y CONSTANTES]
+* LDA [dir]   (0x01): Copia el byte almacenado en [dir] dentro del acumulador A.
+* STA [dir]   (0x02): Copia el valor actual de A dentro de la dirección [dir].
+* LDI A, #val (0x0C): Introduce el número fijo #val directamente en A.
+* CPI A, #val (0x0D): Compara A con el número #val. Resta de forma simulada 
+                      (A - #val) para activar flags (Z si son iguales, C si A 
+                      es menor, N si el resultado es negativo) sin destruir el 
+                      valor original que tenías en A.
+
+[REGISTRO DE ÍNDICE X (MANEJO DE ARRAYS / PANTALLA)]
+* LDX #dir (0x0F): Guarda una dirección de memoria de 16 bits en el registro X.
+* LDA (X)  (0x10): Mira la dirección que está guardada en X, va a esa celda de 
+                   la RAM, lee su byte y lo copia en A.
+* STA (X)  (0x11): Mira la dirección que está guardada en X y copia el valor de 
+                   A en esa celda de la RAM (ideal para recorrer la VRAM).
+* INX      (0x12): Suma 1 a la dirección guardada en X (avanza al siguiente píxel/byte).
+* DEX      (0x13): Resta 1 a la dirección guardada en X (retrocede al byte anterior).
+
+[ARITMÉTICA Y LÓGICA (ALU)]
+* ADD [dir] (0x03): Suma el byte de [dir] al valor actual de A. Si el resultado 
+                    pasa de 255, activa el flag de Acarreo (C=1).
+* SUB [dir] (0x04): Resta el byte de [dir] al valor actual de A. Si el resultado 
+                    es menor que 0, activa el flag de Acarreo (C=1).
+* AND [dir] (0x07): Aplica la operación Y lógica bit a bit entre A y [dir]. Borra 
+                    el flag C. Se usa para crear máscaras y apagar bits/píxeles.
+* OR  [dir] (0x08): Aplica la operación O lógica bit a bit entre A y [dir]. Borra 
+                    el flag C. Se usa para encender bits o inyectar colores.
+* XOR [dir] (0x09): Aplica la operación O exclusiva bit a bit entre A y [dir]. 
+                    Borra el flag C. Se usa para invertir bits (efecto flash) o 
+                    para poner A a cero rápidamente si haces XOR consigo mismo.
+
+[DESPLAZAMIENTO Y ROTACIÓN (MANEJO DE PÍXELES EMPAQUETADOS)]
+* SHL A (0x19): Desplaza todos los bits de A un paso a la izquierda. El bit más 
+                alto (7) cae en el flag C y entra un 0 por la derecha (bit 0).
+* SHR A (0x1A): Desplaza todos los bits de A un paso a la derecha. El bit más 
+                bajo (0) cae en el flag C y entra un 0 por la izquierda (bit 7).
+* ROL A (0x1B): Rota los bits de A a la izquierda. El bit 7 que sale vuelve a 
+                entrar por el bit 0, y además se copia en el flag C.
+* ROR A (0x1C): Rota los bits de A a la derecha. El bit 0 que sale vuelve a 
+                entrar por el bit 7, y además se copia en el flag C.
+
+[CONTROL DE FLUJO (CONDICIONES Y BUCLES)]
+* JMP [dir] (0x05): Salta directamente a la dirección de código [dir].
+* JC  [dir] (0x06): Salta a [dir] solo si el flag de Acarreo es 1 (hubo desborde/resta menor a 0).
+* JNC [dir] (0x0E): Salta a [dir] solo si el flag de Acarreo es 0 (no hubo desborde).
+* JZ  [dir] (0x0A): Salta a [dir] solo si el flag de Cero es 1 (el resultado dio 0 o la comparación fue igual).
+* JNZ [dir] (0x14): Salta a [dir] solo si el flag de Cero es 0 (el resultado no dio 0).
+
+[SUBRUTINAS Y PILA (ESTRUCTURA DE FUNCIONES)]
+* PUSH A   (0x15): Guarda el byte actual de A en la Pila (RAM) y mueve el puntero SP.
+* POP A    (0x16): Recupera el último byte guardado en la Pila y lo devuelve a A.
+* CALL [dir](0x17): Guarda en la Pila la dirección de la siguiente instrucción 
+                    (retorno) y salta a ejecutar la función ubicada en [dir].
+* RET      (0x18): Saca de la Pila la dirección de retorno guardada por el CALL y 
+                    vuelve exactamente al punto donde se llamó a la función.

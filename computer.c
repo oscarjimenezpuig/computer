@@ -11,6 +11,15 @@
 #define FION(F) ((((F) & memory[RF])!=0)?1:0) //comprobacion de flag
 #define KION(K) ((((K) & memory[IIN])!=0)?1:0) //comprobacion de tecla
 
+#define FON(F) (memory[RF]|=(F)) //conecta flag
+#define FOFF(F) (memory[RF]&=(~(F))) //desconecta flag
+#define KON(K) (memory[IIN]|=(K)) //conecta tecla
+
+#define MSET(D,V) (memory[(D)]=V) //asigna valor a una direccion
+#define MGET(D) memory[D] //consigue el valor de una direccion
+
+#define TOD(D,U) ((D)+(U)*256) //se pasan dos bytes a direccion
+
 static Display* display=NULL;
 static Colormap colormap;
 static Window window;
@@ -150,6 +159,28 @@ static int prg_inp(char* program) {
     return 0;
 }
 
+static void rpc_inc() {
+    //incrementa en 1 la direccion de lectura del programa
+    byte_t* down=memory+RPC;
+another:
+    if(*down<255) {
+        *down+=1;
+    } else {
+        *down=0;
+        down++;
+        goto another;
+    }
+}
+
+static unsigned short rpd_giv() {
+    //da la direccion como un short
+    return TOD(memory[RPC],memory[RPC+1]);
+}
+
+static int prg_exe() {
+    //ejecucion del programa
+
+
 void cmp_ini() {
     const unsigned short SCR_W=SCRW*PIXDIM;
     const unsigned short SCR_H=SCRH*PIXDIM;
@@ -212,7 +243,7 @@ int main(int program_len,char* program[]) {
     int err=0;
     //se introduce el programa como cadena de caracteres de longitud byte toda seguida
     cmp_ini();
-    if(program_len>0 && !(err=prg_inp(program[0]))) {
+    if(program_len>0 && !(err=prg_inp(program[1]))) {
         while(!KION(KQT)) {
             scr_drw();
             if(!FION(FWAI)) {
