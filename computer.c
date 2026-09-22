@@ -159,26 +159,141 @@ static int prg_inp(char* program) {
     return 0;
 }
 
-static void rpc_inc() {
-    //incrementa en 1 la direccion de lectura del programa
-    byte_t* down=memory+RPC;
-another:
-    if(*down<255) {
-        *down+=1;
+static void dir_inc(byte_t* d,byte_t* u) {
+    //incrementa en 1 la direccion 
+    if((*d)==255) {
+        *u+=1;
+        *d=0;
     } else {
-        *down=0;
-        down++;
-        goto another;
+        (*d)+=1;
     }
 }
 
-static unsigned short rpd_giv() {
-    //da la direccion como un short
+static void dir_dec(byte_t* d,byte_t* u) {
+    if(*d==0) {
+        *u-=1;
+        *d+=255;
+    } else *d-=1;
+}
+
+static int rpc_inc() {
+    dir_inc(memory+RPC,memory+RPC+1);
+    if(TOD(memory[RPC],memory[RPC+1])<IPR+DPR) return 0;
+    else return err_prt("HALT Opcode not found",-3);
+}
+
+static unsigned short rpc_giv() {
+    //da la direccion de ejecucion como un short
     return TOD(memory[RPC],memory[RPC+1]);
+}
+
+static void flg_zer() {
+    //comprueba que hay flag zero
+    if(memory[RA]==0) FON(FZ);
+    else FOFF(FZ);
+}
+
+#define COF(O,F) (o==(O) && FION((F)))
+#define CON(O,F) (o==(O) && !FION((F)))
+
+static void jmp_cas(byte_t o,byte_t d,byte_t u) {
+    if(o==JMPd || COF(JFCd,FC) || COF(JFZd,FZ) || COF(JFNd,FN) || CON(JNCd,FC) || CON(JNZd,FZ) || CON(JNNd,FN)) {
+        memory[RPC]=d;
+        memory[RPC+1]=u;
+        FON(FJD);
+    }
+}
+
+#undef COF
+#undef CON
+
+static void stk_psh(byte_t v) {
+    //introduce byte en el stack y desplaza el indicador de la pila
+    memory[TOD(memory[RHP],memory[RHP+1])]=v;
+    dir_inc(memory+RHP,memory+RHP+1);
+}
+
+static byte_t stk_pop() {
+    //disminuye en 1 la direccion y devuelve el valor (siempre que no sea l principio de la pila)
+    byte_t ret=0;
+    unsigned short dira=TOD(memory[RHP],memory[RHP+1]);
+    if(dira>IST) {
+        ret=memory[dira-1];
+        dir_dec(memory+RHP,memory+RHP+1);
+    }
+    return ret;
+}
+
+static void one_byte(byte_t opcode) {
+}
+
+
+static int two_byte(byte_t opcode) {
+    //ejecuta las ordenes que necesitan tres bytes de entrada
+    byte_t b[2];
+    for(byte_t k=0;k<3;k++) {
+        rpc_inc();
+        b[k]=memory[rpc_giv()];
+    }
+    if(opcode==LDAd) {
+        memory[RA]=memory[TOD(b[0],b[1])];
+    } else if(opcode==STAd) {
+        memory[TOD(b[0],b[1])]=memory[RA];
+    } else if(opcode==LDXd) {
+        memory[RX]=b[0];
+        memory[RX+1]=b[1];
+    } else if(opcode==ADDd || opcode==SUBd) {
+        byte_t val=memory[TOD(b[0],b[1])];
+        if(opcode==SUBd) FOFF(FN);
+        else FOFF(FC);
+        while(val--) {
+            memory[RA]+=(opcode==ADDd)?1:-1;
+            if(memory[RA]==0 && opcode==ADDd) FON(FC); 
+            else if(memory[RA]==255 && opcode==SUBd) FON(FN);
+        }
+        flg_zer();
+    } else if(opcode>=ANDd && opcode<=XORd) {
+        byte_t val=memory[TOD(b[0],b[1])];
+        switch(opcode) {
+            case ANDd:
+                memory[RA]&=val;
+                break;
+            case ORd:
+                memory[RA]|=val;
+                break;
+            case XORd:
+                memory[RA]^=val;
+                break;
+        }
+        flg_zer();
+    } else if(opcode>=JMPd && opcode<=JNNd) {
+        jmp_cas(opcode,b[0],b[1]);
+    } else if(opcode==CLLd) {
+        byte_t dd=memory[RPC];
+        byte_t du=memory[RPC+1];
+        dir_inc(&dd,&du);
+        stk_psh(dd);
+        stk_psh(du);
+        memory[RPC]=b[0];
+        memory[RPC+1]=b[1];
+        FON(FJD);
+    } return err_prt("Opcode not found",-2);
+    return 0;
 }
 
 static int prg_exe() {
     //ejecucion del programa
+    int err=0;
+    byte_t opcode=rpc_giv();
+    if(opcode==LDIA || opcode==CPIA) one_byte(opcode);
+    else if(opcode==HALT || opcode==WAIT || (opcode>=LDAX && opcode<=DECX) || (opcode>=NOTA && opcode<=RORA) || opcode==PSHA || opcode==POPA || opcode==RET) zero_byte(opcode);
+    else (err=two_byte(opcode));
+    if(!err) { 
+        if(FION(FJD)) FOFF(FJD);
+        else (err=rpc_inc());
+    }
+    return err;
+}
 
 
 void cmp_ini() {
@@ -244,12 +359,12 @@ int main(int program_len,char* program[]) {
     //se introduce el programa como cadena de caracteres de longitud byte toda seguida
     cmp_ini();
     if(program_len>0 && !(err=prg_inp(program[1]))) {
-        while(!KION(KQT)) {
+        while(!KION(KQT) && !err) {
             scr_drw();
             if(!FION(FWAI)) {
                 scr_lis();
                 if(!KION(KPA)) {
-                    //ejecucion probrama
+                    err=prg_exe();
                 }
             }
         }
