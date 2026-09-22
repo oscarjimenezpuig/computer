@@ -60,7 +60,7 @@
 #define LDAd 2 //copia de dir a A->2
 #define STAd 3 //copia de A a dir->2
 #define LDIA 4 //valor directo a A->1
-#define CPIA 5 //compara el valor directo con A (A-val simulada) activa flags->1
+#define CPIA 5 //compara el valor directo con A (A-val simulada) activa flag cero si son iguales o flag negativo si el dato entrado es menor que A->1
 #define LDXd 6 //guarda la direccion d en X->2
 #define LDAX 7 //copia el valor de la direccion apuntada por X en A->0
 #define STAX 8 //copia el valor de A en la direccion apuntada por X->0

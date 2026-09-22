@@ -224,7 +224,20 @@ static byte_t stk_pop() {
     return ret;
 }
 
+static void zero_byte(byte_t opcode) {
+}
+
 static void one_byte(byte_t opcode) {
+    rpc_inc();
+    byte_t d=memory[rpc_giv()];
+    if(opcode==LDIA) {
+        memory[RA]=d;
+    } else if(opcode==CPIA) {
+        byte_t da=memory[RA];
+        FOFF(FZ|FN);
+        if(da==d) FON(FZ);
+        else if(d<da) FON(FN);
+    }
 }
 
 
