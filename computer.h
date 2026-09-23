@@ -9,7 +9,7 @@
 #define IZP 0 //inicio de la pagina cero
 #define DZP 1 //dimension de la pagina cero
 #define IRG (IZP+DZP) //inicio de los registros
-#define DRG 8 //dimension de los registros
+#define DRG 9 //dimension de los registros
 #define IST (IRG+DRG) //inicio de la pila
 #define DST 256 //dimension del stack
 #define IPR (IST+DST) //inicio del programa

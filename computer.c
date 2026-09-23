@@ -32,7 +32,7 @@ static unsigned long color[4];
 
 static int err_prt(char* s,int e) {
     //impresion de un error con codigo e
-    fprintf(stderr,"ERROR: %s",s);
+    fprintf(stderr,"ERROR: %s\n",s);
     return e;
 }
 
@@ -60,7 +60,7 @@ static void wtc_zer() {
     while(p!=memory+IWC+DWC) *p++=0;
 }
 
-unsigned int wtc_to_int() {
+static unsigned int wtc_to_int() {
     unsigned long int time=0;
     byte_t* p=memory+IWC;
     unsigned long int factor=1;
@@ -225,6 +225,33 @@ static byte_t stk_pop() {
 }
 
 static void zero_byte(byte_t opcode) {
+    if(opcode==HALT) KON(KQT);
+    else if(opcode==WAIT) FON(FWAI);
+    else if(opcode==LDAX) MSET(RA,MGET(TOD(memory[RX],memory[RX+1])));
+    else if(opcode==STAX) MSET(TOD(memory[RX],memory[RX+1]),RA);
+    else if(opcode==INCX) dir_inc(memory+RX,memory+RX+1);
+    else if(opcode==DECX) dir_dec(memory+RX,memory+RX+1);
+    else if(opcode==NOTA) MSET(RA,~MGET(RA));
+    else if(opcode>=SHLA && opcode<=RORA) {
+        FOFF(FC|FZ);
+        byte_t val=MGET(RA);
+        if(opcode==SHLA || opcode==ROLA) {
+            if(val & 128) FON(FC);
+            val=val<<1;
+            if(opcode==ROLA && FION(FC)) val|=1;
+        } else {
+            if(val & 1) FON(FC);
+            val=val>>1;
+            if(opcode==RORA && FION(FC)) val|=128;
+        }
+        MSET(RA,val);
+    } else if(opcode==PSHA) stk_psh(MGET(RA));
+    else if(opcode==POPA) MSET(RA,stk_pop());
+    else if(opcode==RET) {
+        memory[RPC]=stk_pop();
+        memory[RPC+1]=stk_pop();
+        FON(FJD);
+    }
 }
 
 static void one_byte(byte_t opcode) {
@@ -298,6 +325,7 @@ static int prg_exe() {
     //ejecucion del programa
     int err=0;
     byte_t opcode=rpc_giv();
+    printf("opcode actual=%i\n",opcode);//dbg
     if(opcode==LDIA || opcode==CPIA) one_byte(opcode);
     else if(opcode==HALT || opcode==WAIT || (opcode>=LDAX && opcode<=DECX) || (opcode>=NOTA && opcode<=RORA) || opcode==PSHA || opcode==POPA || opcode==RET) zero_byte(opcode);
     else (err=two_byte(opcode));
@@ -314,10 +342,11 @@ void cmp_ini() {
     const unsigned short SCR_H=SCRH*PIXDIM;
     byte_t* p=memory;
     while(p!=memory+DMEM) *p++=0;
-    memory[RPC]=IPR%256;
-    memory[RPC+1]=IPR/256;
-    memory[RHP]=IST%256;
-    memory[RHP+1]=IST/256;
+    memory[RPC]=(IPR%256);
+    memory[RPC+1]=(IPR/256);
+    memory[RHP]=(IST%256);
+    memory[RHP+1]=(IST/256);
+    mem_prt();//dbg
     for(unsigned short dir=IWC;dir<IWC+DWC;dir++) memory[dir]=255;
     int screenum=0;
 	display=XOpenDisplay(0);
@@ -360,11 +389,36 @@ void cmp_end() {
 	XCloseDisplay(display);
 }
 
+static void sec_prt(unsigned short dir,unsigned short length) {
+    printf("Inicio=%i Final=%i\n",dir,dir+length-1);
+    unsigned char counter=0;
+    for(unsigned short p=dir;p<dir+length;p++) {
+        if(counter==10) {
+            counter=0;
+            puts("");
+        } else counter++;
+        printf("%03i ",memory[p]);
+    }
+    puts("");
+}
+
 void mem_prt() {
-    printf("SIZE=%i\n",DMEM);
-    byte_t* p=memory;
-    while(p!=memory+DMEM) printf("%03i ",*p++);
-    printf("\n");
+    puts("REGISTROS");
+    sec_prt(IRG,DRG);
+    puts("PILA");
+    sec_prt(IST,DST);
+    /*
+    puts("PROGRAMA");
+    sec_prt(IPR,DPR);
+    puts("RAM");
+    sec_prt(IRM,DRM);
+    puts("PANTALLA");
+    sec_prt(IVR,DVR);
+    puts("TECLADO");
+    sec_prt(IIN,DIN);
+    puts("RELOJ");
+    sec_prt(IWC,DWC);
+    */
 }
 
 int main(int program_len,char* program[]) {
@@ -376,7 +430,7 @@ int main(int program_len,char* program[]) {
             scr_drw();
             if(!FION(FWAI)) {
                 scr_lis();
-                if(!KION(KPA)) {
+                if(!KION(KPA) && !KION(KQT)) {
                     err=prg_exe();
                 }
             }
