@@ -57,36 +57,36 @@
 
 #define HALT 0 //para el sistema->0
 #define WAIT 1 //interrupcion hasta refresco->0
-#define LDAd 2 //copia de dir a A->2
-#define STAd 3 //copia de A a dir->2
-#define LDIA 4 //valor directo a A->1
-#define CPIA 5 //compara el valor directo con A (A-val simulada) activa flag cero si son iguales o flag negativo si el dato entrado es menor que A->1
-#define LDXd 6 //guarda la direccion d en X->2
-#define LDAX 7 //copia el valor de la direccion apuntada por X en A->0
-#define STAX 8 //copia el valor de A en la direccion apuntada por X->0
-#define INCX 9 //incrementa el valor de la direccion en 1->0
-#define DECX 10 //decrementa la direccion de X en 1->0
-#define ADDd 11 //suma A con valor en d y deposita en A (carry y zero)->2
-#define SUBd 12 //resta A con valor en d (carry y zero)->2
-#define ANDd 13 //and A con valor en d (zero)->2
-#define ORd 14 //or A con valor en d (zero)->2
-#define XORd 15 //xor A con valor en d (zero)->2
-#define NOTA 16 //niega el valor A->0
-#define SHLA 17 //desplaza de los bits A izquierda (carry y zero)->0
-#define SHRA 18 //desplaza de los bits A derecha (carry y zero)->0
-#define ROLA 19 //rota izquierda bits de A (carry y zero)->0
-#define RORA 20 //rota derecha bits de A (carry y zero)->0
-#define JMPd 21 //salta a la direccion d->2
-#define JFCd 22 //si flag carry salta a d->2
-#define JNCd 23 //si no carry salta a d->2
-#define JFZd 24 //si flag zero salta a d->2
-#define JNZd 25 //si no flag zero salta a d->2
-#define JFNd 26 //si flag negativo salta a d->2
-#define JNNd 27 //si flag no negativo salta a d->2
-#define PSHA 28 //valor de A a la pila->0
-#define POPA 29 //valor de la pila a A->0
-#define CLLd 30 //va a la direccion y actual se guarda en la pila->2
-#define RET 31 //se saca la direccion y se va alli->0
+#define LDAX 2 //copia el valor de la direccion apuntada por X en A->0
+#define STAX 3 //copia el valor de A en la direccion apuntada por X->0
+#define INCX 4 //incrementa el valor de la direccion en 1->0
+#define DECX 5 //decrementa la direccion de X en 1->0
+#define NOTA 6 //niega el valor A->0
+#define SHLA 7 //desplaza de los bits A izquierda (carry y zero)->0
+#define SHRA 8 //desplaza de los bits A derecha (carry y zero)->0
+#define ROLA 9 //rota izquierda bits de A (carry y zero)->0
+#define RORA 10 //rota derecha bits de A (carry y zero)->0
+#define PSHA 11 //valor de A a la pila->0
+#define POPA 12 //valor de la pila a A->0
+#define RET 13 //se saca la direccion y se va alli->0
+#define LDIA 20 //valor directo a A->1
+#define CPIA 21 //compara el valor directo con A (A-val simulada) activa flag cero si son iguales o flag negativo si el dato entrado es menor que A->1
+#define LDAd 30 //copia de dir a A->2
+#define STAd 31 //copia de A a dir->2
+#define LDXd 32 //guarda la direccion d en X->2
+#define ADDd 33 //suma A con valor en d y deposita en A (carry y zero)->2
+#define SUBd 34 //resta A con valor en d (carry y zero)->2
+#define ANDd 35 //and A con valor en d (zero)->2
+#define ORd 36 //or A con valor en d (zero)->2
+#define XORd 37 //xor A con valor en d (zero)->2
+#define JMPd 38 //salta a la direccion d->2
+#define JFCd 39 //si flag carry salta a d->2
+#define JNCd 40 //si no carry salta a d->2
+#define JFZd 41 //si flag zero salta a d->2
+#define JNZd 42 //si no flag zero salta a d->2
+#define JFNd 43 //si flag negativo salta a d->2
+#define JNNd 44 //si flag no negativo salta a d->2
+#define CLLd 45 //va a la direccion y actual se guarda en la pila->2
 
 
 // TIPOS

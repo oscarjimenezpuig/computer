@@ -36,14 +36,6 @@ static int err_prt(char* s,int e) {
     return e;
 }
 
-static unsigned long col_new(byte_t brg) {
-	XColor xc;
-	xc.flags=DoRed|DoGreen|DoBlue;
-	xc.red=xc.green=xc.blue=21675*brg;
-	XAllocColor(display,colormap,&xc);
-	return xc.pixel;
-}
-
 static void wtc_inc() {
     //se incrementa en 1 el valor del reloj
     byte_t* p=memory+IWC;
@@ -71,6 +63,15 @@ static unsigned int wtc_to_int() {
     }
     return time;
 }
+
+static unsigned long col_new(byte_t brg) {
+	XColor xc;
+	xc.flags=DoRed|DoGreen|DoBlue;
+	xc.red=xc.green=xc.blue=21675*brg;
+	XAllocColor(display,colormap,&xc);
+	return xc.pixel;
+}
+
 
 static void sqr_drw(int x,int y,byte_t c) {
     //dibuja un cuadrado de dimension d de color c
@@ -170,42 +171,30 @@ static void dir_inc(byte_t* d,byte_t* u) {
 }
 
 static void dir_dec(byte_t* d,byte_t* u) {
+    //decrementa en uno la direccion
     if(*d==0) {
         *u-=1;
         *d+=255;
     } else *d-=1;
 }
 
-static int rpc_inc() {
-    dir_inc(memory+RPC,memory+RPC+1);
-    if(TOD(memory[RPC],memory[RPC+1])<IPR+DPR) return 0;
-    else return err_prt("HALT Opcode not found",-3);
+static byte_t* dir_get(byte_t d,byte_t u) {
+    //obtiene el puntero de una direccion
+    unsigned short dir=TOD(u,d);
+    if(dir<DMEM) return memory+dir;
+    return NULL;
 }
 
-static unsigned short rpc_giv() {
-    //da la direccion de ejecucion como un short
-    return TOD(memory[RPC],memory[RPC+1]);
-}
-
-static void flg_zer() {
-    //comprueba que hay flag zero
-    if(memory[RA]==0) FON(FZ);
-    else FOFF(FZ);
-}
-
-#define COF(O,F) (o==(O) && FION((F)))
-#define CON(O,F) (o==(O) && !FION((F)))
-
-static void jmp_cas(byte_t o,byte_t d,byte_t u) {
-    if(o==JMPd || COF(JFCd,FC) || COF(JFZd,FZ) || COF(JFNd,FN) || CON(JNCd,FC) || CON(JNZd,FZ) || CON(JNNd,FN)) {
-        memory[RPC]=d;
-        memory[RPC+1]=u;
-        FON(FJD);
+static int dir_tud(byte_t* ptr,byte_t* d,byte_t* u) {
+    //pasa puntero a dos datos de direccion
+    if(ptr>=memory && ptr<memory+DMEM) {
+        unsigned short dir=ptr-memory;
+        *u=dir%256;
+        *d=dir/256;
+        return 1;
     }
-}
-
-#undef COF
-#undef CON
+    return 0;
+}  
 
 static void stk_psh(byte_t v) {
     //introduce byte en el stack y desplaza el indicador de la pila
@@ -224,108 +213,55 @@ static byte_t stk_pop() {
     return ret;
 }
 
-static void zero_byte(byte_t opcode) {
-    if(opcode==HALT) KON(KQT);
-    else if(opcode==WAIT) FON(FWAI);
-    else if(opcode==LDAX) MSET(RA,MGET(TOD(memory[RX],memory[RX+1])));
-    else if(opcode==STAX) MSET(TOD(memory[RX],memory[RX+1]),RA);
-    else if(opcode==INCX) dir_inc(memory+RX,memory+RX+1);
-    else if(opcode==DECX) dir_dec(memory+RX,memory+RX+1);
-    else if(opcode==NOTA) MSET(RA,~MGET(RA));
-    else if(opcode>=SHLA && opcode<=RORA) {
-        FOFF(FC|FZ);
-        byte_t val=MGET(RA);
-        if(opcode==SHLA || opcode==ROLA) {
-            if(val & 128) FON(FC);
-            val=val<<1;
-            if(opcode==ROLA && FION(FC)) val|=1;
-        } else {
-            if(val & 1) FON(FC);
-            val=val>>1;
-            if(opcode==RORA && FION(FC)) val|=128;
-        }
-        MSET(RA,val);
-    } else if(opcode==PSHA) stk_psh(MGET(RA));
-    else if(opcode==POPA) MSET(RA,stk_pop());
-    else if(opcode==RET) {
-        memory[RPC]=stk_pop();
-        memory[RPC+1]=stk_pop();
-        FON(FJD);
-    }
+static byte_t des_l(byte_t oc,byte ra) {
+    if(ra & 128) FON(FC);
+    ra=ra<<1;
+    if(FION(FC) && oc==ROLA) ra|=1;
+    return ra;
 }
 
-static void one_byte(byte_t opcode) {
-    rpc_inc();
-    byte_t d=memory[rpc_giv()];
-    if(opcode==LDIA) {
-        memory[RA]=d;
-    } else if(opcode==CPIA) {
-        byte_t da=memory[RA];
-        FOFF(FZ|FN);
-        if(da==d) FON(FZ);
-        else if(d<da) FON(FN);
-    }
+static byte_t des_r(byte_t oc,byte ra) {
+    if(ra & 1) FON(FC);
+    ra=ra>>1;
+    if(FION(FC) && oc==RORA) ra|=128;
+    return ra;
 }
 
+static void ula(byte_t oc) {
+    //calculos a partir de la entrada del opcode
+    //todos los flags de calculo eliminados
+    byte_t ra=memory[RA];
+    FOFF(FC|FZ|FN);
+    if(oc<20) {
+        switch(oc) {
+            case NOTA:
+                ra=~ra;
+                break;
+            case SHLA:
+            case ROLA:
+                ra=des_l(oc,ra);
+                break;
+            case SHRA:
+            case RORA:
+                ra=des_r(oc,ra);
+                break;
+        }
+    } else if(oc<30) {
+        switch(oc) {
+            case CPIA:
+                //TODO Continuar programacion de ULA
+                //Hay que poner flag cero si ra es 0
 
-static int two_byte(byte_t opcode) {
-    //ejecuta las ordenes que necesitan tres bytes de entrada
-    byte_t b[2];
-    for(byte_t k=0;k<3;k++) {
-        rpc_inc();
-        b[k]=memory[rpc_giv()];
-    }
-    if(opcode==LDAd) {
-        memory[RA]=memory[TOD(b[0],b[1])];
-    } else if(opcode==STAd) {
-        memory[TOD(b[0],b[1])]=memory[RA];
-    } else if(opcode==LDXd) {
-        memory[RX]=b[0];
-        memory[RX+1]=b[1];
-    } else if(opcode==ADDd || opcode==SUBd) {
-        byte_t val=memory[TOD(b[0],b[1])];
-        if(opcode==SUBd) FOFF(FN);
-        else FOFF(FC);
-        while(val--) {
-            memory[RA]+=(opcode==ADDd)?1:-1;
-            if(memory[RA]==0 && opcode==ADDd) FON(FC); 
-            else if(memory[RA]==255 && opcode==SUBd) FON(FN);
-        }
-        flg_zer();
-    } else if(opcode>=ANDd && opcode<=XORd) {
-        byte_t val=memory[TOD(b[0],b[1])];
-        switch(opcode) {
-            case ANDd:
-                memory[RA]&=val;
-                break;
-            case ORd:
-                memory[RA]|=val;
-                break;
-            case XORd:
-                memory[RA]^=val;
-                break;
-        }
-        flg_zer();
-    } else if(opcode>=JMPd && opcode<=JNNd) {
-        jmp_cas(opcode,b[0],b[1]);
-    } else if(opcode==CLLd) {
-        byte_t dd=memory[RPC];
-        byte_t du=memory[RPC+1];
-        dir_inc(&dd,&du);
-        stk_psh(dd);
-        stk_psh(du);
-        memory[RPC]=b[0];
-        memory[RPC+1]=b[1];
-        FON(FJD);
-    } return err_prt("Opcode not found",-2);
-    return 0;
-}
+
+
+
+
+
 
 static int prg_exe() {
     //ejecucion del programa
     int err=0;
     byte_t opcode=rpc_giv();
-    printf("opcode actual=%i\n",opcode);//dbg
     if(opcode==LDIA || opcode==CPIA) one_byte(opcode);
     else if(opcode==HALT || opcode==WAIT || (opcode>=LDAX && opcode<=DECX) || (opcode>=NOTA && opcode<=RORA) || opcode==PSHA || opcode==POPA || opcode==RET) zero_byte(opcode);
     else (err=two_byte(opcode));
