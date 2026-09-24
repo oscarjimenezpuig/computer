@@ -227,6 +227,14 @@ static byte_t des_r(byte_t oc,byte_t ra) {
     return ra;
 }
 
+static int is_write(byte_t* d) {
+    return (d && d>=memory+IRWM && d<memory+IRWM+DRWM+DORM);
+}
+
+static int is_read(byte_t* d) {
+    return (d && d>=IORM && d<IORM+DORM);
+}
+
 static int ula(byte_t oc,byte_t bs,byte_t* b) {
     //calculos a partir de la entrada del opcode
     //todos los flags de calculo eliminados
@@ -236,6 +244,9 @@ static int ula(byte_t oc,byte_t bs,byte_t* b) {
     int err=0;
     if(oc<20 && bs==0) {
         switch(oc) {
+            case LDAX:
+                ra=*(dir_get(memory[RX],memory[RX+1]));
+                break;
             case NOTA:
                 ra=~ra;
                 break;
@@ -252,6 +263,9 @@ static int ula(byte_t oc,byte_t bs,byte_t* b) {
         }
     } else if(oc<30 && bs==1) {
         switch(oc) {
+            case LDIA:
+                ra=b[0];
+                break;
             case CPIA:
                 if(ra==b[0]) FON(FZ);
                 else if(ra>b[0]) FON(FN);
@@ -266,9 +280,12 @@ static int ula(byte_t oc,byte_t bs,byte_t* b) {
             d[k]=*(dir_get(memory[RPC],memory[RPC+1]));
         }
         byte_t* ptr=dir_get(d[0],d[1]);
-        if(ptr && ptr>=memory+IRWM && ptr<memory+(DRWM+DORM)) {
+        if(is_write(ptr)) {
             byte_t val=*ptr;
             switch(oc) {
+                case LDAd:
+                    ra=*ptr;
+                    break;
                 case ADDd:
                     unsigned short prea=val+ra;
                     if(prea<256) ra=prea;
@@ -295,6 +312,9 @@ static int ula(byte_t oc,byte_t bs,byte_t* b) {
                 case XORd:
                     ra=ra^val;
                     break;
+                case POPA:
+                    ra=stk_pop();
+                    break;
                 default:
                     err=-2;
             }
@@ -310,6 +330,7 @@ static int ula(byte_t oc,byte_t bs,byte_t* b) {
 }
 
 static int zero_byte(byte_t oc) {
+    int err=0;
     switch(oc) {
         case HALT:
             KON(KQT);
@@ -317,13 +338,93 @@ static int zero_byte(byte_t oc) {
         case WAIT:
             FON(FWAI);
             break;
-        case LDAX:
-            FOFF(FN|FC|FZ);
-            memory[RA]=*(dir_get(memory[RX],memory[RX+1]));
-            if(memory[RA]==0) FON(FZ);
+        case STAX:
+            *(dir_get(memory[RX],memory[RX+1]))=memory[RA];
             break;
-            case 
+        case INCX:
+            dir_inc(memory+RX,memory+RX+1);
+            break;
+        case DECX:
+            dir_dec(memory+RX,memory+RX+1);
+            break;
+        case PSHA:
+            stk_psh(memory[RA]);
+            break;
+        default:
+            err=ula(oc,0,NULL);
+    }
+    return err;
 }
+
+static int one_byte(byte_t oc) {
+    dir_inc(memory+RPC,memory+RPC+1);
+    byte_t nb=*(dir_get(memory[RPC],memory[RPC+1]));
+    int err=0;
+    switch(oc) {
+        default:
+            byte_t arr[]={nb};
+            err=ula(oc,1,arr);
+    }
+    return err;
+}
+
+static int crjm(byte_t oc,byte_t f) {
+    if(oc==JMPd) return 1;
+    else {
+        int par=(oc%2==0);
+        if(!par && FION(f)) return 1;
+        else return 0;
+    }
+}
+
+static int jump(byte_t oc,byte_t* d) {
+    byte_t* dir=dir_get(d[0],d[1]);
+    if(dir>=IPR && dir<IPR+DPR) {
+        if(crjm(JMPd,0) || crjm(JFCd,FC) || crjm(JNCd,FC) || crjm(JFZd,FZ) || crjm(JNZd,FZ) || crjm(JFNd,FN) || crjm(JNNd,FN)) {
+            memory[RPC]=d[0];
+            memory[RPC+1]=d[1];
+            FON(FJD);
+        }
+    } else {
+        return err_prt("JUMP out of memory",-5);
+    }
+    return 0;
+}   
+
+static int two_byte(byte_t oc) {
+    int err=0;
+    byte_t ab[2];
+    for(byte_t k=0;k<2;k++) {
+        dir_inc(memory+RPC,memory+RPC+1);
+        ab[k]=*(dir_get(memory[RPC],memory[RPC+1]));
+    }
+    byte_t* dir=dir_get(ab[0],ab[1]);
+    switch(oc) {
+        case STAd:
+            if(is_write(dir)) *dir=memory[RA];
+            else err=-4;
+        case LDXd:
+            if(is_write(dir)) {
+                memory[RX]=ab[0];
+                memory[RX+1]=ab[1];
+            } else err=-4;
+        case JMPd:
+        case JFCd:
+        case JNCd:
+        case JFZd:
+        case JNZd:
+        case JFNd:
+        case JNNd:
+            err=jump(oc,ab);
+            break;
+        default:
+            err=ula(oc,2,ab);
+    }
+    if(err==-4) return err_prt("Writing out of memory",-4);
+    return err;
+}
+
+//TODO Programar CALL y RET
 
 
 static int prg_exe() {
