@@ -213,26 +213,28 @@ static byte_t stk_pop() {
     return ret;
 }
 
-static byte_t des_l(byte_t oc,byte ra) {
+static byte_t des_l(byte_t oc,byte_t ra) {
     if(ra & 128) FON(FC);
     ra=ra<<1;
     if(FION(FC) && oc==ROLA) ra|=1;
     return ra;
 }
 
-static byte_t des_r(byte_t oc,byte ra) {
+static byte_t des_r(byte_t oc,byte_t ra) {
     if(ra & 1) FON(FC);
     ra=ra>>1;
     if(FION(FC) && oc==RORA) ra|=128;
     return ra;
 }
 
-static void ula(byte_t oc) {
+static int ula(byte_t oc,byte_t bs,byte_t* b) {
     //calculos a partir de la entrada del opcode
     //todos los flags de calculo eliminados
     byte_t ra=memory[RA];
+    byte_t rb=0;
     FOFF(FC|FZ|FN);
-    if(oc<20) {
+    int err=0;
+    if(oc<20 && bs==0) {
         switch(oc) {
             case NOTA:
                 ra=~ra;
@@ -245,29 +247,98 @@ static void ula(byte_t oc) {
             case RORA:
                 ra=des_r(oc,ra);
                 break;
+            default:
+                err=-2;
         }
-    } else if(oc<30) {
+    } else if(oc<30 && bs==1) {
         switch(oc) {
             case CPIA:
-                //TODO Continuar programacion de ULA
-                //Hay que poner flag cero si ra es 0
+                if(ra==b[0]) FON(FZ);
+                else if(ra>b[0]) FON(FN);
+                break;
+            default:
+                err=-2;
+        }
+    } else if(oc<50 && bs==2) {
+        byte_t d[2];
+        for(int k=0;k<1;k++) {
+            dir_inc(memory+RPC,memory+RPC+1);
+            d[k]=*(dir_get(memory[RPC],memory[RPC+1]));
+        }
+        byte_t* ptr=dir_get(d[0],d[1]);
+        if(ptr && ptr>=memory+IRWM && ptr<memory+(DRWM+DORM)) {
+            byte_t val=*ptr;
+            switch(oc) {
+                case ADDd:
+                    unsigned short prea=val+ra;
+                    if(prea<256) ra=prea;
+                    else {
+                        rb=prea/256;
+                        ra=prea%256;
+                        FON(FC);
+                    }
+                    break;
+                case SUBd:
+                    short pres=ra-val;
+                    if(pres>=0) ra=pres;
+                    else {
+                        ra=pres;
+                        FON(FN);
+                    }
+                    break;
+                case ANDd:
+                    ra=ra&val;
+                    break;
+                case ORd:
+                    ra=ra|val;
+                    break;
+                case XORd:
+                    ra=ra^val;
+                    break;
+                default:
+                    err=-2;
+            }
+        }
+    } else err=-2;
+    if(err) err_prt("Opcode not found",err);
+    else {
+        if(ra==0) FON(FZ);
+        memory[RA]=ra;
+        memory[RB]=rb;
+    }
+    return err;
+}
 
-
-
-
-
+static int zero_byte(byte_t oc) {
+    switch(oc) {
+        case HALT:
+            KON(KQT);
+            break;
+        case WAIT:
+            FON(FWAI);
+            break;
+        case LDAX:
+            FOFF(FN|FC|FZ);
+            memory[RA]=*(dir_get(memory[RX],memory[RX+1]));
+            if(memory[RA]==0) FON(FZ);
+            break;
+            case 
+}
 
 
 static int prg_exe() {
     //ejecucion del programa
     int err=0;
-    byte_t opcode=rpc_giv();
-    if(opcode==LDIA || opcode==CPIA) one_byte(opcode);
-    else if(opcode==HALT || opcode==WAIT || (opcode>=LDAX && opcode<=DECX) || (opcode>=NOTA && opcode<=RORA) || opcode==PSHA || opcode==POPA || opcode==RET) zero_byte(opcode);
-    else (err=two_byte(opcode));
+    byte_t opcode=*(dir_get(memory[RPC],memory[RPC+1]));
     if(!err) { 
         if(FION(FJD)) FOFF(FJD);
-        else (err=rpc_inc());
+        else {
+            dir_inc(memory+RPC,memory+RPC+1);
+            byte_t* ptr=dir_get(memory[RPC],memory[RPC+1]);
+            if(ptr>=memory+IPR+DPR) {
+                err=err_prt("Out of program bounds",-3);
+            }
+        }
     }
     return err;
 }
