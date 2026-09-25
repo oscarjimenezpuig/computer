@@ -52,6 +52,8 @@
 #define KPA 64 //bandera de pausa
 #define KQT 128 //bandera de quit
 
+#define KSU "iljkzxpq" //keysym de las letras de teclado aceptadas
+
 #define VMH 1.0 //velocidad en megahercios
 #define TMH 16666.6 //numero de instrucciones por megaherzio
 
@@ -69,7 +71,7 @@
 #define PSHA 11 //valor de A a la pila->0
 #define POPA 12 //valor de la pila a A->0
 #define RET 13 //se saca la direccion y se va alli->0
-#define SWAB 14 //intercambia los valores de RA i RB
+#define SWAB 14 //intercambia los valores de RA i RB->
 #define LDIA 20 //valor directo a A->1
 #define CPIA 21 //compara el valor directo con A (A-val simulada) activa flag cero si son iguales o flag negativo si el dato entrado es menor que A->1
 #define LDAd 30 //copia de dir a A->2

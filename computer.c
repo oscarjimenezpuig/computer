@@ -15,9 +15,6 @@
 #define FOFF(F) (memory[RF]&=(~(F))) //desconecta flag
 #define KON(K) (memory[IIN]|=(K)) //conecta tecla
 
-#define MSET(D,V) (memory[(D)]=V) //asigna valor a una direccion
-#define MGET(D) memory[D] //consigue el valor de una direccion
-
 #define TOD(D,U) ((D)+(U)*256) //se pasan dos bytes a direccion
 
 static Display* display=NULL;
@@ -75,6 +72,7 @@ static unsigned long col_new(byte_t brg) {
 
 static void sqr_drw(int x,int y,byte_t c) {
     //dibuja un cuadrado de dimension d de color c
+    c=c%4;
 	XSetForeground(display,graphic,color[c]);
 	XFillRectangle(display,virtual,graphic,x,y,PIXDIM,PIXDIM);
 }
@@ -111,7 +109,7 @@ static void scr_drw() {
 
 static void scr_lis() {
     //funcion que se encarga del registro de teclas y guardarlas en memoria
-    const char* KEYS="iljkzxpq"; //teclas utilizadas
+    const char* KEYS=KSU; //teclas utilizadas
     XEvent ev;
     KeySym ks;
     int ty=0;
@@ -180,21 +178,10 @@ static void dir_dec(byte_t* d,byte_t* u) {
 
 static byte_t* dir_get(byte_t d,byte_t u) {
     //obtiene el puntero de una direccion
-    unsigned short dir=TOD(u,d);
+    unsigned short dir=TOD(d,u);
     if(dir<DMEM) return memory+dir;
     return NULL;
 }
-
-static int dir_tud(byte_t* ptr,byte_t* d,byte_t* u) {
-    //pasa puntero a dos datos de direccion
-    if(ptr>=memory && ptr<memory+DMEM) {
-        unsigned short dir=ptr-memory;
-        *u=dir%256;
-        *d=dir/256;
-        return 1;
-    }
-    return 0;
-}  
 
 static void stk_psh(byte_t v) {
     //introduce byte en el stack y desplaza el indicador de la pila
@@ -232,7 +219,7 @@ static int is_write(byte_t* d) {
 }
 
 static int is_read(byte_t* d) {
-    return (d && d>=IORM && d<IORM+DORM);
+    return (d && d>=memory+IORM && d<memory+IORM+DORM);
 }
 
 static int ula(byte_t oc,byte_t bs,byte_t* b) {
@@ -350,6 +337,16 @@ static int zero_byte(byte_t oc) {
         case PSHA:
             stk_psh(memory[RA]);
             break;
+        case SWAB:
+            byte_t c=memory[RA];
+            memory[RA]=memory[RB];
+            memory[RB]=c;
+            break;
+        case RET:
+            memory[RPC+1]=stk_pop();
+            memory[RPC]=stk_pop();
+            FON(FJD);
+            break;
         default:
             err=ula(oc,0,NULL);
     }
@@ -368,19 +365,38 @@ static int one_byte(byte_t oc) {
     return err;
 }
 
-static int crjm(byte_t oc,byte_t f) {
-    if(oc==JMPd) return 1;
-    else {
-        int par=(oc%2==0);
-        if(!par && FION(f)) return 1;
-        else return 0;
+static int jmp_is(byte_t oc) {
+    int ret=0;
+    switch(oc) {
+        case JMPd:
+            ret=1;
+            break;
+        case JFCd:
+            ret=FION(FC);
+            break;
+        case JNCd:
+            ret=!FION(FC);
+            break;
+        case JFZd:
+            ret=FION(FZ);
+            break;
+        case JNZd:
+            ret=!FION(FZ);
+            break;
+        case JFNd:
+            ret=FION(FN);
+            break;
+        case JNNd:
+            ret=!FION(FN);
+            break;
     }
+    return ret;
 }
 
-static int jump(byte_t oc,byte_t* d) {
-    byte_t* dir=dir_get(d[0],d[1]);
-    if(dir>=IPR && dir<IPR+DPR) {
-        if(crjm(JMPd,0) || crjm(JFCd,FC) || crjm(JNCd,FC) || crjm(JFZd,FZ) || crjm(JNZd,FZ) || crjm(JFNd,FN) || crjm(JNNd,FN)) {
+static int jmp(byte_t oc,byte_t* d) {
+    byte_t* dir=dir_get(*d,*(d+1));
+    if(dir>=memory+IPR && dir<memory+IPR+DPR) {
+        if(jmp_is(oc)) {
             memory[RPC]=d[0];
             memory[RPC+1]=d[1];
             FON(FJD);
@@ -389,7 +405,7 @@ static int jump(byte_t oc,byte_t* d) {
         return err_prt("JUMP out of memory",-5);
     }
     return 0;
-}   
+}
 
 static int two_byte(byte_t oc) {
     int err=0;
@@ -401,13 +417,19 @@ static int two_byte(byte_t oc) {
     byte_t* dir=dir_get(ab[0],ab[1]);
     switch(oc) {
         case STAd:
-            if(is_write(dir)) *dir=memory[RA];
-            else err=-4;
+            {
+                if(is_write(dir)) *dir=memory[RA];
+                else err=-4;
+                break;
+            }
         case LDXd:
-            if(is_write(dir)) {
-                memory[RX]=ab[0];
-                memory[RX+1]=ab[1];
-            } else err=-4;
+            {
+                if(is_write(dir)) {
+                    memory[RX]=ab[0];
+                    memory[RX+1]=ab[1];
+                } else err=-4;
+                break;
+            }
         case JMPd:
         case JFCd:
         case JNCd:
@@ -415,7 +437,13 @@ static int two_byte(byte_t oc) {
         case JNZd:
         case JFNd:
         case JNNd:
-            err=jump(oc,ab);
+            err=jmp(oc,ab);
+            break;
+        case CLLd:
+            dir_inc(memory+RPC,memory+RPC+1);
+            stk_psh(memory[RPC]);
+            stk_psh(memory[RPC+1]);
+            err=jmp(JMPd,ab);
             break;
         default:
             err=ula(oc,2,ab);
@@ -424,13 +452,15 @@ static int two_byte(byte_t oc) {
     return err;
 }
 
-//TODO Programar CALL y RET
-
-
 static int prg_exe() {
     //ejecucion del programa
     int err=0;
-    byte_t opcode=*(dir_get(memory[RPC],memory[RPC+1]));
+    byte_t* doc=dir_get(memory[RPC],memory[RPC+1]);
+    byte_t oc=*doc;
+    printf("opcode=%i en %li\n",oc,doc-memory);//dbg
+    if(oc<20) err=zero_byte(oc);
+    else if(oc<30) err=one_byte(oc);
+    else err=two_byte(oc);
     if(!err) { 
         if(FION(FJD)) FOFF(FJD);
         else {
@@ -454,7 +484,7 @@ void cmp_ini() {
     memory[RPC+1]=(IPR/256);
     memory[RHP]=(IST%256);
     memory[RHP+1]=(IST/256);
-    mem_prt();//dbg
+    FON(FZ);//se conecta el flag cero nada mas empezar
     for(unsigned short dir=IWC;dir<IWC+DWC;dir++) memory[dir]=255;
     int screenum=0;
 	display=XOpenDisplay(0);
@@ -505,7 +535,8 @@ static void sec_prt(unsigned short dir,unsigned short length) {
             counter=0;
             puts("");
         } else counter++;
-        printf("%03i ",memory[p]);
+        if(memory[p]==0) printf("--- ");
+        else printf("%03i ",memory[p]);
     }
     puts("");
 }
@@ -515,7 +546,6 @@ void mem_prt() {
     sec_prt(IRG,DRG);
     puts("PILA");
     sec_prt(IST,DST);
-    /*
     puts("PROGRAMA");
     sec_prt(IPR,DPR);
     puts("RAM");
@@ -526,7 +556,6 @@ void mem_prt() {
     sec_prt(IIN,DIN);
     puts("RELOJ");
     sec_prt(IWC,DWC);
-    */
 }
 
 int main(int program_len,char* program[]) {
@@ -544,7 +573,6 @@ int main(int program_len,char* program[]) {
             }
         }
     }
-    mem_prt();//dbg
     cmp_end();
     return err;
 }
