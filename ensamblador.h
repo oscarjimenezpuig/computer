@@ -1,6 +1,10 @@
-// COMPUTER:  Simula computadora grafica de 8 bits con bus de datos de 16 bits
+// ENSAMBLADOR: Proporciona un lenguaje ensamblador para computer
+
+#include <stdio.h>
 
 // CONSTANTES
+
+//Constantes copiadas de computer
 
 #define SCRW 144 //numero de columnas
 #define SCRH 160 //numero de filas
@@ -47,11 +51,6 @@
 #define KPA 64 //bandera de pausa
 #define KQT 128 //bandera de quit
 
-#define KSU "iljkzxpq" //keysym de las letras de teclado aceptadas
-
-#define VMH 1.0 //velocidad en megahercios
-#define TMH 16666.6 //numero de instrucciones por megaherzio
-
 #define HALT 0 //para el sistema->0
 #define WAIT 1 //interrupcion hasta refresco->0
 #define LDAX 2 //copia el valor de la direccion apuntada por X en A->0
@@ -86,24 +85,34 @@
 #define JNNd 44 //si flag no negativo salta a d->2
 #define CLLd 45 //va a la direccion y actual se guarda en la pila->2
 
+// Constantes propias de ensamblador
 
-// TIPOS
+#define LOADS "LOD"
+#define STATS "STA"
+#define INCS "INC"
+#define DECS "DEC"
+#define NOTS "NOT"
+#define SHLS "SHL"
+#define SHRS "SHR"
+#define ROLS "ROL"
+#define RORS "ROR"
+#define PSHS "PSH"
+#define POPS "POP"
+#define RETS "RET"
+#define SWAS "SWA"
+#define CMPS "CMP"
+#define ADDS "ADD"
+#define SUBS "SUB"
+#define ANDS "AND"
+#define ORS "OR"
+#define XORS "XOR"
+#define JMS "JM"
+#define JMNS "JMN"
+#define CLLS "CLL"
 
-typedef unsigned char byte_t;
-
-typedef byte_t memory_t[DMEM];
-
-// VARIABLES
-
-
-// FUNCIONES
-
-void cmp_ini();
-//se inicia la memoria
-
-void cmp_end();
-//se libera todo el espacio (xlib)
-
-void mem_prt();
-//se imprimen todos los bytes de la memoria
+//Estructura de la linea:
+//  Cinco valores que representan la direccion relativa del programa (no leidos)
+//  Orden
+//  Primer complemento A o X o bandera (Z,N,C)
+//  Segundo complemento valor o  [direccion]
 

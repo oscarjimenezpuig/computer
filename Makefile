@@ -2,8 +2,8 @@
 # PROYECTO
 # ============================================================
 
-TARGET = computer
-SRCS   = computer.c
+TARGET = assembler
+SRCS   = ensamblador.c
 
 # Archivo que almacena el tipo de compilación
 # N = normal

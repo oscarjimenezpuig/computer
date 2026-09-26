@@ -72,7 +72,6 @@ static unsigned long col_new(byte_t brg) {
 
 static void sqr_drw(int x,int y,byte_t c) {
     //dibuja un cuadrado de dimension d de color c
-    c=c%4;
 	XSetForeground(display,graphic,color[c]);
 	XFillRectangle(display,virtual,graphic,x,y,PIXDIM,PIXDIM);
 }
@@ -86,16 +85,17 @@ static void scr_drw() {
         wtc_zer();
         memory[RF]&=(~FWAI);
         byte_t* p=memory+IVR;
-        byte_t msc=3;
+        byte_t val=1;
         for(int f=0;f<SCRH;f++) {
             for(int c=0;c<SCRW;c++) {
-                byte_t col=(*p & msc);
+                byte_t msc=val+(val<<1);
+                byte_t col=(*p & msc)/val;
                 sqr_drw(c*PIXDIM,f*PIXDIM,col);
                 if(msc==192) {
-                    msc=3;
+                    val=1;
                     p++;
                 } else {
-                    msc*=4;
+                    val=val<<2;
                 }
             }
         }
@@ -214,14 +214,6 @@ static byte_t des_r(byte_t oc,byte_t ra) {
     return ra;
 }
 
-static int is_write(byte_t* d) {
-    return (d && d>=memory+IRWM && d<memory+IRWM+DRWM+DORM);
-}
-
-static int is_read(byte_t* d) {
-    return (d && d>=memory+IORM && d<memory+IORM+DORM);
-}
-
 static int ula(byte_t oc,byte_t bs,byte_t* b) {
     //calculos a partir de la entrada del opcode
     //todos los flags de calculo eliminados
@@ -253,60 +245,49 @@ static int ula(byte_t oc,byte_t bs,byte_t* b) {
             case LDIA:
                 ra=b[0];
                 break;
-            case CPIA:
-                if(ra==b[0]) FON(FZ);
-                else if(ra>b[0]) FON(FN);
-                break;
             default:
                 err=-2;
         }
     } else if(oc<50 && bs==2) {
-        byte_t d[2];
-        for(int k=0;k<1;k++) {
-            dir_inc(memory+RPC,memory+RPC+1);
-            d[k]=*(dir_get(memory[RPC],memory[RPC+1]));
+        byte_t* ptr=dir_get(b[0],b[1]);
+        byte_t val=ptr?*ptr:0;
+        switch(oc) {
+            case LDAd:
+                ra=val;
+                break;
+            case ADDd:
+                unsigned short prea=val+ra;
+                if(prea<256) ra=prea;
+                else {
+                    rb=prea/256;
+                    ra=prea%256;
+                    FON(FC);
+                }
+                break;
+            case SUBd:
+                short pres=ra-val;
+                if(pres>=0) ra=pres;
+                else {
+                    ra=pres;
+                    FON(FN);
+                }
+                break;
+            case ANDd:
+                ra=ra&val;
+                break;
+            case ORd:
+                ra=ra|val;
+                break;
+            case XORd:
+                ra=ra^val;
+                break;
+            case POPA:
+                ra=stk_pop();
+                break;
+            default:
+                err=-2;
         }
-        byte_t* ptr=dir_get(d[0],d[1]);
-        if(is_write(ptr)) {
-            byte_t val=*ptr;
-            switch(oc) {
-                case LDAd:
-                    ra=*ptr;
-                    break;
-                case ADDd:
-                    unsigned short prea=val+ra;
-                    if(prea<256) ra=prea;
-                    else {
-                        rb=prea/256;
-                        ra=prea%256;
-                        FON(FC);
-                    }
-                    break;
-                case SUBd:
-                    short pres=ra-val;
-                    if(pres>=0) ra=pres;
-                    else {
-                        ra=pres;
-                        FON(FN);
-                    }
-                    break;
-                case ANDd:
-                    ra=ra&val;
-                    break;
-                case ORd:
-                    ra=ra|val;
-                    break;
-                case XORd:
-                    ra=ra^val;
-                    break;
-                case POPA:
-                    ra=stk_pop();
-                    break;
-                default:
-                    err=-2;
-            }
-        }
-    } else err=-2;
+    }
     if(err) err_prt("Opcode not found",err);
     else {
         if(ra==0) FON(FZ);
@@ -358,6 +339,12 @@ static int one_byte(byte_t oc) {
     byte_t nb=*(dir_get(memory[RPC],memory[RPC+1]));
     int err=0;
     switch(oc) {
+        case CPIA:
+            FOFF(FZ|FN|FC);
+            byte_t ra=memory[RA];
+            if(ra==nb) FON(FZ);
+            else if(ra>nb) FON(FN);
+            break;
         default:
             byte_t arr[]={nb};
             err=ula(oc,1,arr);
@@ -417,19 +404,12 @@ static int two_byte(byte_t oc) {
     byte_t* dir=dir_get(ab[0],ab[1]);
     switch(oc) {
         case STAd:
-            {
-                if(is_write(dir)) *dir=memory[RA];
-                else err=-4;
-                break;
-            }
+            *dir=memory[RA];
+            break;
         case LDXd:
-            {
-                if(is_write(dir)) {
-                    memory[RX]=ab[0];
-                    memory[RX+1]=ab[1];
-                } else err=-4;
-                break;
-            }
+            memory[RX]=ab[0];
+            memory[RX+1]=ab[1];
+            break;
         case JMPd:
         case JFCd:
         case JNCd:
@@ -457,7 +437,6 @@ static int prg_exe() {
     int err=0;
     byte_t* doc=dir_get(memory[RPC],memory[RPC+1]);
     byte_t oc=*doc;
-    printf("opcode=%i en %li\n",oc,doc-memory);//dbg
     if(oc<20) err=zero_byte(oc);
     else if(oc<30) err=one_byte(oc);
     else err=two_byte(oc);
